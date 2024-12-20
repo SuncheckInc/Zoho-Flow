@@ -1,0 +1,444 @@
+#### When creating a deal record from the landing page, the process works as follows:
+#### A specific event triggers the function through a webhook. This happens when certain actions or inputs are detected on the landing page.
+#### The function then receives and extracts the relevant data from the webhook payload. This data includes all the necessary information to create a new deal.
+#### Based on the received data, the system creates a new deal record to store all relevant details.
+#### If the webhook payload also includes a "conversation ID" (a unique identifier for a conversation), the system doesn't just create a new record—it updates the existing deal associated with that conversation instead. 
+
+/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+Webhook URL : https://flow.zoho.com/854705855/flow/webhook/incoming?zapikey=1001.70b7aad2a67385612e5f43b92ea11ef6.71df12d680f399f19e03290e8d2381c4&isdebug=false
+
+/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+string Message_Created_Conversation(map message_created)
+{
+// Get the record ID from the message
+record_id = message_created.get("id");
+//info record_id;
+// Get the content and payload from the message
+content = message_created.get("content");
+payload = content.get("payload");
+//info payload;
+// Extracting necessary fields from the payload
+video_id = ifnull(payload.getJSON("video_id"),"");
+parameters = ifnull(payload.getJSON("parameters"),Map());
+referred_by = parameters.getJSON("referred_by");
+///////////////////14/11/2024////////////////////
+design = ifnull(payload.getJSON("design"),Map());
+equipmentplacement = ifnull(design.getJSON("equipmentPlacement"),Map());
+secondary = ifnull(equipmentplacement.getJSON("secondary"),Map());
+secondary_mounting = ifnull(secondary.getJSON("mounting"),"");
+secondary_placement = ifnull(secondary.getJSON("placement"),"");
+primary = ifnull(equipmentplacement.getJSON("primary"),Map());
+primary_mounting = ifnull(primary.getJSON("mounting"),"");
+primary_placement = ifnull(primary.getJSON("placement"),"");
+manufactured = ifnull(design.getJSON("manufactured"),"");
+///////////////////14/11/2024////////////////////
+// Extracting design details
+aerialyticdesign = ifnull(payload.getJSON("aerialyticDesign"),Map());
+designId = ifnull(aerialyticdesign.get("designId"),"");
+customerId = ifnull(aerialyticdesign.get("customerId"),"");
+addressId = ifnull(aerialyticdesign.get("addressId"),"");
+propertyId = ifnull(aerialyticdesign.get("propertyId"),"");
+proposalId = ifnull(aerialyticdesign.get("proposalId"),"");
+utilityProfileId = ifnull(aerialyticdesign.get("utilityProfileId"),"");
+// Extracting account details
+account = ifnull(payload.getJSON("account"),Map());
+user_id = ifnull(account.getJSON("user_id"),"");
+phone_number = ifnull(account.getJSON("phoneNumber"),"");
+// Getting conversation ID
+conversation = ifnull(message_created.get("conversation"),"");
+timestamp = payload.getJSON("timestamp");
+// Extract suncheck details
+suncheck = ifnull(payload.get("suncheck"),Map());
+back = ifnull(suncheck.get("back"),Map());
+//info "back" + back;
+front = ifnull(suncheck.get("front"),Map());
+// Extract  address details
+address = ifnull(back.get("address"),Map());
+city = ifnull(address.get("city"),"");
+state = ifnull(address.get("state"),"");
+street = ifnull(address.get("street"),"");
+zipCode = ifnull(address.get("zipCode"),"");
+project_full_address = street + ", " + city + ", " + state + ", " + zipCode;
+//info project_full_address;
+// //////////////////Mailing address//11/11/2024///////// 
+mailing_address = ifnull(back.get("mailAddress"),Map());
+//info "Stage 0" + mailing_address;
+if(mailing_address.isEmpty())
+{
+	mail_city = city;
+	mail_state = state;
+	mail_street = street;
+	mail_zipCode = zipCode;
+	mailing_full_address = project_full_address;
+}
+else if(mailing_address != "" || mailing_address != null)
+{
+	mail_city = ifnull(mailing_address.getJSON("city"),"");
+	info "Stage1" + mail_city;
+	mail_state = ifnull(mailing_address.get("state"),"");
+	info "Stage2" + mail_state;
+	mail_street = ifnull(mailing_address.getJSON("street"),"");
+	info "Stage3" + mail_street;
+	mail_zipCode = ifnull(mailing_address.getJSON("zipCode"),"");
+	info "Stage4" + mail_zipCode;
+	mailing_full_address = mail_street + " ," + mail_city + ", " + mail_state + " ," + mail_zipCode;
+}
+//////////////////Mailing address//11/11/2024///////// 
+// Extract front details
+name = ifnull(front.getJSON("name"),"");
+get_name_prefix = name.getPrefix(" ");
+get_name_suffix = name.getSuffix(" ");
+email = ifnull(front.getJSON("email"),"");
+quiz_id = ifnull(payload.getJSON("id"),"");
+currenttime = zoho.currenttime;
+//info currenttime;
+utility_provider = ifnull(payload.getJSON("utilityProvider"),Map());
+//info "utility_provider" + utility_provider;
+utility_provider_options = ifnull(payload.getJSON("utilityProviderOptions"),List());
+//info "utility_provider_options" + utility_provider_options;
+if(utility_provider_options.size() > 0)
+{
+	for each  utility in utility_provider_options
+	{
+		utility_id = utility.get("id");
+		if(utility_provider == utility_id)
+		{
+			utility_name = utility.get("name");
+			info "utility_name" + utility_name;
+		}
+	}
+}
+optional_map = Map();
+// answer_list = list();
+info conversation;
+// Search for existing deal using the conversation ID
+search_records = zoho.crm.searchRecords("Deals","(Aerialytic_Conversation_Id:equals:" + conversation + ")",1,200,optional_map,"crm");
+info search_records;
+if(search_records.size() > 0)
+{
+	deal_id = search_records.get(0).get("id");
+	//info deal_id;
+	// 	info "test";
+	// Use get(0) to fetch the first record
+	deal_details = zoho.crm.getRecordById("Deals",deal_id);
+	conversation_id = ifnull(deal_details.get("Aerialytic_Conversation_Id"),"");
+	deal = Map();
+	if(conversation == conversation_id)
+	{
+		// Update quiz timestamps based on the conditions
+		first_quiz = ifnull(deal_details.get("First_Quiz_Knowledge_Completion_TimeStamp"),"");
+		second_quiz = ifnull(deal_details.get("Second_Quiz_Data_Collection_TimeStamp"),"");
+		third_quiz = ifnull(deal_details.get("Third_Quiz_Knowledge_Timestamp"),"");
+		fourth_quiz = ifnull(deal_details.get("Fourth_Quiz_Solar_Quote_and_Backup_Addon_Tim"),"");
+		fifth_quiz = ifnull(deal_details.get("Fifth_Quiz_Site_Survey_Fundamentals_TimeStamp"),"");
+		aerialytic_proposal_id = ifnull(deal_details.get("Aerialytic_Proposal_Id"),"");
+		aerialytic_utility_profile_id = ifnull(deal_details.get("Aerialytic_Utility_Profile_Id"),"");
+		aerialytic_design_id = ifnull(deal_details.get("Aerialytic_Design_Id"),"");
+		aerialytic_customer_id = ifnull(deal_details.get("Aerialytic_Customer_Id"),"");
+		aerialytic_address_id = ifnull(deal_details.get("Aerialytic_Address_Id"),"");
+		aerialytic_property_id = ifnull(deal_details.get("Aerialytic_Property_Id"),"");
+		equipment_location_view = ifnull(deal_details.get("Equipment_Location_View"),"");
+		plan_a_equipment_location = ifnull(deal_details.get("Plan_A_Equipment_Location"),"");
+		plan_b_equipment_location = ifnull(deal_details.get("Plan_B_Equipment_Location"),"");
+		additional_product = ifnull(deal_details.get("Additional_Product"),"");
+		if(aerialytic_customer_id == null || aerialytic_customer_id == "")
+		{
+			deal.put("Aerialytic_Customer_Id",customerId);
+		}
+		if(aerialytic_address_id == null || aerialytic_address_id == "")
+		{
+			deal.put("Aerialytic_Address_Id",addressId);
+		}
+		if(aerialytic_property_id == null || aerialytic_property_id == "")
+		{
+			deal.put("Aerialytic_Property_Id",propertyId);
+		}
+		// Update timestamps based on the order of quiz completion
+		if(aerialytic_proposal_id == null || aerialytic_proposal_id == "")
+		{
+			deal.put("Aerialytic_Proposal_Id",proposalId);
+		}
+		if(aerialytic_utility_profile_id == null || aerialytic_utility_profile_id == "")
+		{
+			deal.put("Aerialytic_Utility_Profile_Id",utilityProfileId);
+		}
+		if(aerialytic_design_id == null || aerialytic_design_id == "")
+		{
+			deal.put("Aerialytic_Design_Id",designId);
+		}
+		if(quiz_id == "quiz1" && first_quiz == "")
+		{
+			deal.put("First_Quiz_Knowledge_Completion_TimeStamp",zoho.currenttime.toString("yyyy-MM-dd'T'HH:mm:ss"));
+		}
+		if(quiz_id == "quiz2" && second_quiz == "")
+		{
+			deal.put("Second_Quiz_Data_Collection_TimeStamp",zoho.currenttime.toString("yyyy-MM-dd'T'HH:mm:ss"));
+		}
+		if(quiz_id == "quiz3" && third_quiz == "")
+		{
+			deal.put("Third_Quiz_Knowledge_Timestamp",zoho.currenttime.toString("yyyy-MM-dd'T'HH:mm:ss"));
+		}
+		if(quiz_id == "quiz4" && fourth_quiz == "")
+		{
+			deal.put("Fourth_Quiz_Solar_Quote_and_Backup_Addon_Tim",zoho.currenttime.toString("yyyy-MM-dd'T'HH:mm:ss"));
+		}
+		if(quiz_id == "quiz5" && fifth_quiz == "")
+		{
+			deal.put("Fifth_Quiz_Site_Survey_Fundamentals_TimeStamp",zoho.currenttime.toString("yyyy-MM-dd'T'HH:mm:ss"));
+		}
+		if(secondary_mounting == "wall")
+		{
+			deal.put("Plan_B_Battery_Configuration","Wall Mounted");
+		}
+		if(secondary_mounting == "pad")
+		{
+			deal.put("Plan_B_Battery_Configuration","Pad Mounted");
+		}
+		if(primary_mounting == "wall")
+		{
+			deal.put("Plan_A_Battery_Configuration","Wall Mounted");
+		}
+		if(primary_mounting == "pad")
+		{
+			deal.put("Plan_A_Battery_Configuration","Pad Mounted");
+		}
+		if(primary_placement == "exterior")
+		{
+			deal.put("Plan_A_Equipment_Location","Exterior");
+		}
+		if(primary_placement == "interior")
+		{
+			deal.put("Plan_A_Equipment_Location","Interior");
+		}
+		if(secondary_placement == "exterior")
+		{
+			deal.put("Plan_B_Equipment_Location","Exterior");
+		}
+		if(secondary_placement == "interior")
+		{
+			deal.put("Plan_B_Equipment_Location","Interior");
+		}
+		/////////////////////////////25/11/2024///////////////////////////
+		if(manufactured == "usa")
+		{
+			deal.put("Made_in_USA","Made in USA Panels");
+		}
+		update_deal = zoho.crm.updateRecord("Deals",deal_id,deal,{"trigger":{"workflow"}},"crm");
+	}
+}
+else
+{
+	//  if(search_records.size() == 0)
+	// If no existing deal found, create a new deal
+	deal_map = Map();
+	deal_map.put("Phone_Number",phone_number);
+	deal_map.put("Aerialytic_Conversation_Id",conversation);
+	// Project address mapping
+	deal_map.put("City_Project",city);
+	deal_map.put("Street_Project",street);
+	deal_map.put("Zip_Code_Project",zipCode);
+	// // 	if(state != "CA" && state != "NJ" && state != "MA" && state != "TX" && state != "NV" && state != "FL" && state != "CT" && state != "NY")
+	// // 	{
+	// 		deal_map.put("State_Project","Other States");
+	// 	}
+	// 	else
+	// 	{
+	deal_map.put("State_Project",state);
+	// 	}
+	// Mailing address 
+	deal_map.put("City_Mail",mail_city);
+	deal_map.put("Street_Mail",mail_street);
+	deal_map.put("Zip_Code_Mail",mail_zipCode);
+	deal_map.put("State_Mail",mail_state);
+	deal_map.put("Full_Mailing_Address",mailing_full_address);
+	deal_map.put("Full_Project_Address",project_full_address);
+	deal_map.put("Deal_Name",name);
+	deal_map.put("Customer_First_Name",get_name_prefix);
+	deal_map.put("Customer_Last_Name",get_name_suffix);
+	deal_map.put("Customer_Email",email);
+	deal_map.put("Stage","Opportunity Stage 0 - Pre-Design");
+	if(referred_by != "" || referred_by != null)
+	{
+		deal_map.put("Referred_by",referred_by);
+	}
+	// Set the first quiz completion timestamp if applicable
+	if(timestamp != null)
+	{
+		deal_map.put("First_Quiz_Knowledge_Completion_TimeStamp",zoho.currenttime.toString("yyyy-MM-dd'T'HH:mm:ss"));
+	}
+	deal_map.put("Deal_Created_Type","Automation");
+	deal_map.put("Blueprint_Stage","New");
+	deal_map.put("Utility_Company",utility_name);
+	// Create a new deal in Zoho CRM
+	create_deal = zoho.crm.createRecord("Deals",deal_map,{"trigger":{"workflow"}});
+}
+/////////////getQuiz4 answer for additional products///////////
+answers = ifnull(payload.getJSON("answers"),Map());
+info "*" + answers;
+answers_of_quiz = answers.toText();
+if(answers_of_quiz.contains("quiz4"))
+{
+	answer_list = list();
+	made_in_usa = deal_details.getJSON("Made_in_USA");
+	if(made_in_usa != null)
+	{
+		answer_list.add(made_in_usa);
+	}
+	quiz4_Answer = ifnull(payload.getJSON("answers"),Map());
+	//info "*" + quiz4_Answer;
+	quiz4_question = ifnull(quiz4_Answer.getJSON("quiz4"),Map());
+	//info "**" + quiz4_question;
+	if(quiz4_question != null || quiz4_question != "")
+	{
+		question5 = ifnull(quiz4_question.get("question5"),"");
+		info "***" + question5;
+	}
+	if(question5 == "Yes")
+	{
+		answer_list.add("Backup");
+	}
+	question4 = ifnull(quiz4_question.getJSON("question4"),"");
+	info "***" + question4;
+	if(question4 == "Yes")
+	{
+		answer_list.add("Solar Insure");
+	}
+	if(question5 == "No" && question4 == "No")
+	{
+		if(made_in_usa == null)
+		{
+			answer_list.add("NA");
+		}
+	}
+	//info "list_additional_product>>>>>>>" + answer_list;
+	deal.put("Additional_Product",answer_list);
+	update_rec = zoho.crm.updateRecord("Deals",deal_id,deal,{"trigger":{"workflow"}});
+}
+///////////////////////////25/11/2024//////////////////////////
+answers = ifnull(payload.getJSON("answers"),Map());
+info "*" + answers;
+answers_of_quiz = answers.toText();
+if(answers_of_quiz.contains("quiz2"))
+{
+	quiz2_list = list();
+	quiz2_Answer = ifnull(payload.getJSON("answers"),Map());
+	info "*" + quiz2_Answer;
+	quiz2 = ifnull(quiz2_Answer.getJSON("quiz2"),Map());
+	info "**" + quiz2;
+	if(quiz2 != null || quiz2 != "")
+	{
+		quiz2_question = quiz2.getJSON("question5");
+		info "**" + quiz2_question;
+		quiz2_question4 = quiz2.getJSON("question4");
+		info "*quiz2_question4*" + quiz2_question4;
+		amount_consumed = ifnull(quiz2_question4.getJSON("amountConsumed"),"");
+		info amount_consumed;
+		billTotal = ifnull(quiz2_question4.getJSON("billTotal"),"");
+		info billTotal;
+		month = ifnull(quiz2_question4.getJSON("month"),"");
+		info month;
+		if(month == "February")
+		{
+			deal = Map();
+			deal.put("February_KWh",amount_consumed);
+			deal.put("Total_Bill",billTotal);
+			update_rec = zoho.crm.updateRecord("Deals",deal_id,deal);
+		}
+		else if(month == "January")
+		{
+			deal = Map();
+			deal.put("January_KWh",amount_consumed);
+			deal.put("Total_Bill",billTotal);
+			update_rec = zoho.crm.updateRecord("Deals",deal_id,deal);
+		}
+		else if(month == "March")
+		{
+			deal = Map();
+			deal.put("March_KWh",amount_consumed);
+			deal.put("Total_Bill",billTotal);
+			update_rec = zoho.crm.updateRecord("Deals",deal_id,deal);
+		}
+		else if(month == "April")
+		{
+			deal = Map();
+			deal.put("April_KWh",amount_consumed);
+			deal.put("Total_Bill",billTotal);
+			update_rec = zoho.crm.updateRecord("Deals",deal_id,deal);
+		}
+		else if(month == "May")
+		{
+			deal = Map();
+			deal.put("May_KWh",amount_consumed);
+			deal.put("Total_Bill",billTotal);
+			update_rec = zoho.crm.updateRecord("Deals",deal_id,deal);
+		}
+		else if(month == "June")
+		{
+			deal = Map();
+			deal.put("June_KWh",amount_consumed);
+			deal.put("Total_Bill",billTotal);
+			update_rec = zoho.crm.updateRecord("Deals",deal_id,deal);
+		}
+		else if(month == "July")
+		{
+			deal = Map();
+			deal.put("July_KWh",amount_consumed);
+			update_rec = zoho.crm.updateRecord("Deals",deal_id,deal);
+		}
+		else if(month == "August")
+		{
+			deal = Map();
+			deal.put("August_KWh",amount_consumed);
+			deal.put("Total_Bill",billTotal);
+			update_rec = zoho.crm.updateRecord("Deals",deal_id,deal);
+		}
+		if(month == "September")
+		{
+			deal = Map();
+			deal.put("September_KWh",amount_consumed);
+			deal.put("Total_Bill",billTotal);
+			update_rec = zoho.crm.updateRecord("Deals",deal_id,deal);
+		}
+		else if(month == "October")
+		{
+			deal = Map();
+			deal.put("October_KWh",amount_consumed);
+			deal.put("Total_Bill",billTotal);
+			update_rec = zoho.crm.updateRecord("Deals",deal_id,deal);
+		}
+		else if(month == "November")
+		{
+			deal = Map();
+			deal.put("November_KWh",amount_consumed);
+			deal.put("Total_Bill",billTotal);
+			update_rec = zoho.crm.updateRecord("Deals",deal_id,deal);
+		}
+		else if(month == "December")
+		{
+			deal = Map();
+			deal.put("December_KWh",amount_consumed);
+			deal.put("Total_Bill",billTotal);
+			update_rec = zoho.crm.updateRecord("Deals",deal_id,deal);
+		}
+	}
+	for each  record in quiz2_question
+	{
+		if(record.contains("Full home standby generator"))
+		{
+			// Replace the target string with "Generator" if found in the record
+			record = replaceAll(record,"Full home standby generator","Generator");
+		}
+		quiz2_list.add(record);
+		info record;
+		// 		info "quiz2_list>>>>>>>" + quiz2_list;
+	}
+	info "quiz2_list>>>>>>>" + quiz2_list;
+	deal = Map();
+	//////// Update the "Existing_Generation_Assets" field in the deal
+	deal.put("Existing_Generation_Assets",quiz2_list);
+	update_rec = zoho.crm.updateRecord("Deals",deal_id,deal,{"trigger":{"workflow"}});
+}
+// return mail_city;
+return question5;
+}
