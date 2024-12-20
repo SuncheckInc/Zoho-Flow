@@ -1,0 +1,53 @@
+############## We have selected the Zoho Sign app to track when documents are viewed.
+
+For this process:
+
+############## The system fetches the necessary actions and details.
+When a Zoho Sign document is viewed, the Customer_Open_Agreement_Timestamp field in the corresponding deal record is updated with the current Zoho timestamp ##############
+
+void For_Update_Deal_Stage_Contract_Opened(map deal_details)
+{
+    // Log the input details for debugging
+    info deal_details;
+
+    // Extract the "actions" data from the input map
+    actions_data = deal_details.get("actions");
+
+    // Iterate through each action in the actions data
+    for each action in actions_data
+    {
+        // Check if the action contains the key "recipient_email"
+        if(action.containsKey("recipient_email"))
+        {
+            // Retrieve the recipient email
+            recipient_email = action.get("recipient_email");
+            info recipient_email;
+
+            // Search for the deal record using the recipient email
+            search_deal = zoho.crm.searchRecords("Deals", "(Customer_Email:equals:" + recipient_email + ")");
+            info search_deal.size();
+
+            // Check if any matching deal records were found
+            if(search_deal.size() > 0)
+            {
+                // Retrieve the ID of the first matching deal record
+                deal_id = search_deal.get(0).get("id");
+                info deal_id;
+
+                // Create a map to store the updates for the deal record
+                deal_map = Map();
+                
+                // Uncomment the following line to update the deal stage (if needed)
+                // deal_map.put("Stage", "Opportunity Stage 6 - Contract Opened");
+
+                // Update the timestamp for when the customer opened the agreement
+                deal_map.put("Customer_Open_Agreement_Timestamp", zoho.currenttime.toString("yyyy-MM-dd'T'HH:mm:ss"));
+                info deal_map;
+
+                // Update the deal record in the CRM with the prepared map
+                update_deal = zoho.crm.updateRecord("Deals", deal_id.toString(), deal_map, {"trigger":{"workflow"}});
+                info update_deal;
+            }
+        }
+    }
+}
