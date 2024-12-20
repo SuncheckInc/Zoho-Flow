@@ -1,0 +1,73 @@
+####### Fetch data from the webhook URL to update the deal stage to "Opportunity Stage 9 - Site Survey Submitted". 
+####### Simultaneously, record the current Zoho timestamp in the "SiteCapture Ordered Timestamp" field. 
+####### Additionally, retrieve the site capture project report and attach it to the corresponding Zoho project record.
+
+string Admin_Add_Site_Capture_Attachment_Project_Record(string site_capture)
+{
+    // Extract API key and project ID from the site_capture parameter
+    api_key = site_capture.get("api_key");
+    project_id = site_capture.get("project_id");
+
+    // Search for the project record in the CRM using the Site Capture Project ID
+    search_project_record = zoho.crm.searchRecords("Project", "(Site_Capture_Project_ID:equals:" + project_id + ")");
+    info search_project_record;
+
+    // Check if a project record was found
+    if(search_project_record.size() > 0)
+    {
+        // Get the project record ID and the associated deal record ID
+        project_record_id = search_project_record.get(0).get("id");
+        deal_record_id = search_project_record.getJSON("Deal").getJSON("id");
+
+        // Construct the Site Capture API URL
+        url = "https://api.sitecapture.com/customer_api/1_0/project/report/" + project_id;
+
+        // Define API parameters
+        param_map = Map();
+        param_map.put("role", "CUSTOMER");
+        param_map.put("timestampedPhotos", "true");
+        param_map.put("flaggedPhotos", "false");
+        param_map.put("template_key", "training");
+
+        // Encode credentials for Basic Authentication
+        base64authcode = zoho.encryption.base64Encode("SAZTech:saztechsupport1!");
+
+        // Define API headers
+        header_map = Map();
+        header_map.put("Authorization", "Basic " + base64authcode);
+        header_map.put("API_KEY", api_key);
+        header_map.put("Content-Type", "application/json");
+
+        // Make the API call to fetch the project report
+        response = invokeurl
+        [
+            url :url
+            type :GET
+            parameters:param_map
+            headers:header_map
+        ];
+        info response;
+
+        // Update the project record in CRM with the Site Capture report file name
+        project_map = Map();
+        project_map.put("Site_Capture_Report_File_Name", response);
+        update_record = zoho.crm.updateRecord("Project", project_record_id, project_map, {"trigger":{"workflow"}});
+
+        // Attach the Site Capture report to the project record
+        update_attach = zoho.crm.attachFile("Project", project_record_id, response);
+        info update_attach;
+
+        // (Optional) Uncomment the following lines to fetch related attachments if needed
+        // project_attachment = zoho.crm.getRelatedRecords("Attachments", "Project", project_record_id);
+        // info project_attachment;
+
+        // Update the associated deal record in CRM
+        deal_map = Map();
+        deal_map.put("Stage", "Opportunity Stage 9 - Site Survey Submitted");
+        deal_map.put("SiteCapture_Ordered_Timestamp", zoho.currenttime.toString("yyyy-MM-dd'T'HH:mm:ss"));
+        update_deal = zoho.crm.updateRecord("Deals", deal_record_id, deal_map);
+        info update_deal;
+    }
+    // Return the deal record ID
+    return deal_record_id;
+}
