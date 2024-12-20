@@ -1,0 +1,171 @@
+########## We have selected the Zoho Sign app to track when documents are complete.
+For this process:
+The system fetches the necessary actions and details.
+When a Zoho Sign document is complete, the Customer Complete Agreement Timestamp field in the corresponding deal record is updated with the current Zoho timestamp #########
+
+void Update_Deal_Stage_Contract_Signed(map zoho_sign_details)
+{
+    // Uncomment to log the incoming Zoho Sign details for debugging
+    // info zoho_sign_details;
+
+    // Extract the actions data from the Zoho Sign details
+    actions_data = zoho_sign_details.get("actions");
+
+    // Loop through each action in the actions data
+    for each action in actions_data
+    {
+        // Check if the action contains a "recipient_email"
+        if(action.containsKey("recipient_email"))
+        {
+            // Retrieve the recipient email
+            recipient_email = action.get("recipient_email");
+            info recipient_email;
+
+            // Search for the deal in CRM using the recipient's email address
+            search_deal = zoho.crm.searchRecords("Deals", "(Customer_Email:equals:" + recipient_email + ")");
+            
+            // Check if any matching deals are found
+            if(search_deal.size() > 0)
+            {
+                // Retrieve the deal ID of the first matching record
+                deal_id = search_deal.get(0).get("id");
+                info deal_id;
+
+                // Create a map for updating the deal record
+                deal_map = Map();
+
+                // Add the timestamp for when the customer completed the agreement
+                deal_map.put("Customer_Complete_Agreement_Timestamp", zoho.currenttime.toString("yyyy-MM-dd'T'HH:mm:ss"));
+                info deal_map;
+
+                // Update the deal record in CRM and trigger the workflow
+                update_deal = zoho.crm.updateRecord("Deals", deal_id.toString(), deal_map, {"trigger":{"workflow"}});
+                info update_deal;
+
+                /////////////////// Saz Tech 9/12/2024 ///////////////////
+
+                // Fetch related quote records for the deal
+                get_related_records = zoho.crm.getRelatedRecords("Quotation", "Deals", deal_id);
+                info "Related Quotes Count: " + get_related_records.size();
+
+                // If there are related quotes, update their status
+                if(get_related_records.size() > 0)
+                {
+                    // Loop through each related quote
+                    for each quote in get_related_records
+                    {
+                        // Get the related quote ID
+                        related_quote_id = quote.get("id");
+                        info "Related Quote ID: " + related_quote_id;
+
+                        // Prepare the map to update the status of the quote
+                        related_quote_status = Map();
+                        related_quote_status.put("Quotation_Status", "Amended");
+
+                        // Update the related quote status and trigger workflow
+                        update_related_quote = zoho.crm.updateRecord("Quotes1", related_quote_id, related_quote_status, {"trigger":{"workflow"}});
+                        info "Related Quote Update Response: " + update_related_quote;
+                    }
+                }
+
+
+########## The system retrieves the necessary actions and details related to the Zoho Sign document.
+Once the document is fetched, a WorkDrive is created where the Zoho Sign document is uploaded.
+This allows users to click on the link and easily download their document from the WorkDrive. ########
+
+
+string Test_sign(map test)
+{
+// Extract actions from the input map
+document_ids = test.get("document_ids");
+request_id = test.get("request_id");
+performed_by_name = test.get("performed_by_name");
+action = test.get("actions");
+recipient_email = action.getJSON("recipient_email");
+info recipient_email;
+create_sub_folder = zoho.workdrive.createFolder(performed_by_name,"hm9uy6d5497c084c7452db73068759cc72096","drive");
+// info create_sub_folder;
+subfolder_id = create_sub_folder.get("data").getJSON("id");
+info subfolder_id;
+subfolder_url = "https://workdrive.zoho.com/home/cdjzvc1cec9cc880f453d91284578c122aea2/privatespace/folders/" + subfolder_id;
+info subfolder_url;
+// WorkDrive folder ID where files will be uploaded
+folder_id = subfolder_url.getSuffix("folders/");
+// List to store upload responses
+uploadResponses = list();
+// Iterate through each document ID and process
+for each  document in document_ids
+{
+	// Retrieve the document_id
+	document_id = document.get("document_id");
+	document_name = document.get("document_name");
+	// Fetch the PDF content for this document
+	fileResponse = invokeurl
+	[
+		url :"https://sign.zoho.com/api/v1/requests/" + request_id + "/documents/" + document_id + "/pdf"
+		type :GET
+		connection:"zoho_sign"
+	];
+	file_name = document_name + ".pdf";
+	upload = zoho.workdrive.uploadFile(fileResponse,folder_id,file_name,false,"drive");
+	// return upload;
+}
+// Return all upload responses
+access_token_map = Map();
+access_token_map.put("refresh_token","1000.3fac9f357e0e26b6ff2053762eedaf79.2a62aa28c62266142be1f9477f47bfed");
+access_token_map.put("client_id","1000.PKNHAACXMFKQF39I5SSV0DENSL2N2Y");
+access_token_map.put("client_secret","3083c7671ca9e3d420d14af1c3a2704307446335b5");
+access_token_map.put("redirect_uri","https://www.google.com/");
+access_token_map.put("grant_type","refresh_token");
+access_tokens = invokeurl
+[
+	url :"https://accounts.zoho.com/oauth/v2/token?"
+	type :POST
+	parameters:access_token_map
+];
+info access_tokens;
+// Extracting the access token
+access_token = access_tokens.get("access_token");
+// Step 4: Assigning permissions for a resource in WorkDrive
+header = Map();
+//     header.put("Authorization", "Zoho-oauthtoken " + access_token);
+header.put("Accept","application/vnd.api+json");
+data = Map();
+data_param1 = Map();
+att_param1 = Map();
+///////////////sub folder id ////////////////////////////////////////////
+att_param1.put("resource_id",folder_id);
+att_param1.put("shared_type","everyone");
+att_param1.put("role_id","1");
+data_param1.put("attributes",att_param1);
+data_param1.put("type","permissions");
+data.put("data",data_param1);
+response = invokeurl
+[
+	url :"https://www.zohoapis.com/workdrive/api/v1/permissions"
+	type :POST
+	parameters:data.toString()
+	headers:header
+	connection:"drive"
+];
+info response;
+data = response.get("data").getJSON("attributes").getJSON("permalink");
+info data;
+// Search for the deal by recipient email
+search_deal = zoho.crm.searchRecords("Deals","(Customer_Email:equals:" + recipient_email + ")");
+info search_deal.size();
+if(search_deal.size() > 0)
+{
+	// Assuming we want to update the first matching deal
+	deal_id = search_deal.get(0).get("id");
+	info deal_id;
+	deal_map = Map();
+	// 	deal_map.put("Stage","Opportunity Stage 7 - Contract Signed");
+	deal_map.put("Zoho_Sign_Workdrive_URL",data);
+	info deal_map;
+	// Update the deal record
+	update_deal = zoho.crm.updateRecord("Deals",deal_id.toString(),deal_map,{"trigger":{"workflow"}});
+	info update_deal;
+}
+return update_deal;
+}
